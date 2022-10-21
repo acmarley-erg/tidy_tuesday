@@ -1,0 +1,100 @@
+---
+title: "test"
+output: html_document
+date: "2022-10-17"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# load packages
+library(tidyverse)
+library(tidytuesdayR) 
+library(janitor)
+library(ggalt)
+```
+
+Data set used from [Tidy Tuesday Bee Colony data](https://github.com/rfordatascience/tidytuesday/blob/master/data/2022/2022-01-11/readme.md#bee-colonies)
+
+```{r}
+# read in the tidy tuesday data
+bee_data <- tidytuesdayR::tt_load(2022, week = 2)
+
+# break into component datasets
+colony <- bee_data$colony
+stressor <- bee_data$stressor
+```
+
+
+```{r}
+#wrange the colony data
+colony_loss <- colony %>% 
+  dplyr::filter(year == 2015 | year == 2021) %>% 
+  dplyr::filter(months == "January-March") %>% 
+  filter(!state %in% c("Other States", "United States")) %>% 
+  select(year, state, colony_n) %>% 
+  spread(year, colony_n) %>% 
+  clean_names() %>% 
+  mutate(gap = x2021  - x2015) %>% 
+  arrange(desc(gap)) %>% 
+  head(10)
+
+```
+
+
+```{r}
+# make dumbell graph
+ggplot(colony_loss, aes(x = x2015, xend = x2021, y = reorder(state, gap), group = state)) + 
+  geom_dumbbell(colour = "#dddddd",
+                size = 3,
+                colour_x = "#FAAB18",
+                colour_xend = "black") +
+  labs(x = "Colonies", y = "State", title = "Change in Number of Bee Colonies 2015 to 2021") +
+  theme_classic()
+```
+
+#################################################################
+# Attempt at dot density:
+
+```{r}
+library(tigris)
+library(dots)
+library(sf)
+```
+
+
+```{r}
+# what did colonies look like in winter?
+colony_winter <- colony %>% 
+  dplyr::filter(months == "January-March") 
+```
+
+```{r}
+# get US states dataset
+us_states <- states(cb=TRUE)
+
+# combine wit US states dataset
+us_states_simpl <- us_states %>% 
+  dplyr::select(NAME) %>% 
+  rename("state" = "NAME")
+
+# join together
+colony_winter <- left_join(colony_winter, us_states_simpl, by = "state") %>% 
+  filter(!state %in% c("Other States", "United States"))
+  
+```
+
+```{r}
+# Make dot density map
+dots::dots(shp = colony_winter, cols = colony_n, divisor = 10000) + 
+  facet_wrap(~year) +
+  coord_sf(xlim = c(-125, -70), ylim = c(20,50))+
+  labs(
+    title = 'Number of Bee Colonies in Winter',
+    caption = 'One point per 10,000 colonies.'
+  ) + 
+  theme_void()
+```
+
